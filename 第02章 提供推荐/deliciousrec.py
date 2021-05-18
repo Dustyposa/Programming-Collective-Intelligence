@@ -34,3 +34,7 @@ def fillItems(user_dict):
         for item in all_items:
             if item not in ratings:
                 ratings[item] = 0.0
+
+
+if __name__ == '__main__':
+    initializeUserDict("programing")

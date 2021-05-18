@@ -1,3 +1,7 @@
+from itertools import combinations
+from math import pow, sqrt
+from typing import Dict, Callable, List, Tuple
+
 # 一个涉及影评者及其对几部影片评分情况的字典
 critics = {'Lisa Rose': {'Lady in the Water': 2.5, 'Snakes on a Plane': 3.5,
                          'Just My Luck': 3.0, 'Superman Returns': 3.5, 'You, Me and Dupree': 2.5,
@@ -16,177 +20,168 @@ critics = {'Lisa Rose': {'Lady in the Water': 2.5, 'Snakes on a Plane': 3.5,
            'Jack Matthews': {'Lady in the Water': 3.0, 'Snakes on a Plane': 4.0,
                              'The Night Listener': 3.0, 'Superman Returns': 5.0, 'You, Me and Dupree': 3.5},
            'Toby': {'Snakes on a Plane': 4.5, 'You, Me and Dupree': 1.0, 'Superman Returns': 4.0}}
-
-from math import sqrt
-
-
-# 返回一个有关person1与person2的基于距离的相似度评价
-def sim_distance(prefs, person1, person2):
-    # 得到shared_items的列表
-    si = {}
-    for item in prefs[person1]:
-        if item in prefs[person2]:
-            si[item] = 1
-
-    # 如果两者没有共同之处，则返回0
-    if len(si) == 0:
-        return 0
-
-    # 计算所有差值的平方和
-    sum_of_squares = sum([pow(prefs[person1][item] - prefs[person2][item], 2)
-                          for item in si.keys()])
-
-    return 1 / (1 + sqrt(sum_of_squares))
+MOVIE_DATA = Dict[str, Dict[str, float]]
 
 
-# 返回p1和p2的皮尔逊相关系数
-def sim_pearson(prefs, p1, p2):
-    # 得到双方都曾评价过的物品列表
-    si = {}
-    for item in prefs[p1]:
-        if item in prefs[p2]:
-            si[item] = 1
-
-    # 如果两者没有共同之处，则返回0
-    if len(si) == 0:
-        return 0
-
-    # 得到列表元素的个数
-    n = len(si)
-
-    # 对所有偏好求和
-    sum1 = sum([prefs[p1][it] for it in si])
-    sum2 = sum([prefs[p2][it] for it in si])
-
+def sim_distance(
+        prefs: MOVIE_DATA,
+        person_1: str,
+        person_2: str
+) -> float:
+    """欧几里得距离评价"""
+    person_1_data = prefs.get(person_1, {})
+    person_2_data = prefs.get(person_2, {})
+    # 如果没有这个人，当作异常处理
+    if not person_1 or not person_2:
+        return -1.0
+    # 获取共同爱好的 keys
+    common_movies = person_1_data.keys() & person_2_data.keys()
+    # 如果没有共同爱好
+    if not common_movies:
+        return .0
     # 求平方和
-    sum1Sq = sum([pow(prefs[p1][it], 2) for it in si])
-    sum2Sq = sum([pow(prefs[p2][it], 2) for it in si])
+    sum_of_squares = sum(
+        map(lambda movie_name: pow(person_1_data[movie_name] - person_2_data[movie_name], 2), common_movies))
 
-    # 求乘积之和
-    pSum = sum([prefs[p1][it] * prefs[p2][it] for it in si])
+    return 1 / (sqrt(sum_of_squares) + 1)
 
-    # 计算皮尔逊评价值
-    num = pSum - (sum1 * sum2 / n)
-    den = sqrt((sum1Sq - pow(sum1, 2) / n) * (sum2Sq - pow(sum2, 2) / n))
+
+def sim_pearson(
+        prefs: MOVIE_DATA,
+        person_1: str,
+        person_2: str
+) -> float:
+    """皮尔逊相关度"""
+    person_1_data = prefs.get(person_1, {})
+    person_2_data = prefs.get(person_2, {})
+    # 获取共同爱好的 keys
+    common_movies = person_1_data.keys() & person_2_data.keys()
+    if not common_movies:
+        return 0
+    n = len(common_movies)
+    # 求和偏好分
+    sum_p1 = sum((person_1_data[movie] for movie in common_movies))
+    sum_p2 = sum((person_2_data[movie] for movie in common_movies))
+
+    # 求平方和偏好分
+    sum_pow_p1 = sum(((pow(person_1_data[movie], 2) for movie in common_movies)))
+    sum_pow_p2 = sum(((pow(person_2_data[movie], 2) for movie in common_movies)))
+
+    # 求评分乘积和
+    p_sum = sum((person_1_data[movie] * person_2_data[movie] for movie in common_movies))
+
+    # 计算皮尔逊评价
+
+    num = p_sum - (sum_p1 * sum_p2 / n)
+    den = sqrt((sum_pow_p1 - pow(sum_p1, 2) / n) * (sum_pow_p2 - pow(sum_p2, 2) / n))
     if den == 0:
         return 0
-
     r = num / den
-
     return r
 
 
-# Returns the best matches for person from the prefs dictionary.
-# Number of results and similarity function are optional params.
-def topMatches(prefs, person, n=5, similarity=sim_pearson):
-    scores = [(similarity(prefs, person, other), other)
-              for other in prefs if other != person]
-    scores.sort()
-    scores.reverse()
-    return scores[0:n]
+# 计算两两的相似度
+for p1, p2 in combinations(critics, 2):
+    sim_point = sim_distance(critics, p1, p2)
+    print(f"{sim_distance.__name__} - {p1} with {p2}: {sim_point}")
+
+    sim_point = sim_pearson(critics, p1, p2)
+    print(f"{sim_pearson.__name__} - {p1} with {p2}: {sim_point}")
 
 
-# Gets recommendations for a person by using a weighted average
-# of every other user's rankings
-def getRecommendations(prefs, person, similarity=sim_pearson):
-    totals = {}
-    simSums = {}
-    for other in prefs:
-        # don't compare me to myself
+def to_matches(
+        prefs: MOVIE_DATA,
+        person: str,
+        n=5,
+        similarity: Callable = sim_pearson
+) -> List[Tuple[float, str]]:
+    """找到相似的人"""
+    res = [(similarity(prefs, person, o_user), o_user) for o_user in prefs.keys() if o_user != person]
+    res.sort(reverse=True)
+    return res[:n]
+
+
+def get_recommendations(
+        prefs: MOVIE_DATA,
+        person: str,
+        similarity: Callable = sim_pearson
+) -> List[Tuple[float, str]]:
+    """获取推荐的电影"""
+    res = {}
+    for other in prefs.keys():
         if other == person:
             continue
         sim = similarity(prefs, person, other)
-
-        # ignore scores of zero or lower
-        if sim <= 0: continue
-        for item in prefs[other]:
-            # only score movies I haven't seen yet
-            if item not in prefs[person] or prefs[person][item] == 0:
-                # Similarity * Score
-                totals.setdefault(item, 0)
-                totals[item] += prefs[other][item] * sim
-                # Sum of similarities
-                simSums.setdefault(item, 0)
-                simSums[item] += sim
-
-    # Create the normalized list
-    rankings = [(total / simSums[item], item) for item, total in totals.items()]
-
-    # Return the sorted list
-    rankings.sort()
-    rankings.reverse()
+        # 忽略不相似的人
+        if sim <= 0:
+            continue
+        # 遍历影片
+        looked_movies = prefs[person].keys()
+        for movie in prefs[other]:
+            # 只安排自己没评价过的电影
+            if movie not in looked_movies or prefs[person][movie] == 0:
+                res.setdefault(movie, [0, 0])
+                res[movie][0] += sim * prefs[other][movie]
+                res[movie][1] += sim
+    # 归一化
+    rankings = [(sim_sum / n_sum, movie) for movie, (sim_sum, n_sum) in res.items()]
+    rankings.sort(reverse=True)
     return rankings
 
 
-def transformPrefs(prefs):
-    result = {}
-    for person in prefs:
-        for item in prefs[person]:
-            result.setdefault(item, {})
-
-            # Flip item and person
-            result[item][person] = prefs[person][item]
-    return result
-
-
-def calculateSimilarItems(prefs, n=10):
-    # Create a dictionary of items showing which other items they
-    # are most similar to.
-    result = {}
-
-    # Invert the preference matrix to be item-centric
-    itemPrefs = transformPrefs(prefs)
-    c = 0
-    for item in itemPrefs:
-        # Status updates for large datasets
-        c += 1
-        if c % 100 == 0:
-            print("%d / %d" % (c, len(itemPrefs)))
-        # Find the most similar items to this one
-        scores = topMatches(itemPrefs, item, n=n, similarity=sim_distance)
-        result[item] = scores
-    return result
+def transform_prefs(prefs: MOVIE_DATA) -> MOVIE_DATA:
+    """对调人和电影"""
+    res = {}
+    for person, movie_items in prefs.items():
+        for movie_name, point in movie_items.items():
+            res.setdefault(movie_name, {})
+            res[movie_name][person] = point
+    return res
 
 
-def getRecommendedItems(prefs, itemMatch, user):
-    userRatings = prefs[user]
-    scores = {}
-    totalSim = {}
-    # Loop over items rated by this user
-    for (item, rating) in userRatings.items():
+def calculate_similar_items(prefs: MOVIE_DATA, n: int = 10) -> Dict[str, List]:
+    """计算相似物品之间的相似度"""
+    res = {}
+    items_prefs = transform_prefs(prefs)
+    for item in items_prefs:
+        scores = to_matches(items_prefs, item, n=n, similarity=sim_distance)
+        res[item] = scores
+    return res
 
-        # Loop over items similar to this one
-        for (similarity, item2) in itemMatch[item]:
 
-            # Ignore if this user has already rated this item
-            if item2 in userRatings: continue
-            # Weighted sum of rating times similarity
-            scores.setdefault(item2, 0)
-            scores[item2] += similarity * rating
-            # Sum of all the similarities
-            totalSim.setdefault(item2, 0)
-            totalSim[item2] += similarity
+def get_recommend_items(prefs: MOVIE_DATA, item_match: Dict[str, List], user: str):
+    user_data = prefs[user]
+    scores_items = {}
+    for item, rating in user_data.items():
+        for similarity, s_item in item_match[item]:
+            if s_item in user_data:
+                continue
+            scores_items.setdefault(item, [0, 0])
+            scores_items[item][0] += rating * similarity
+            scores_items[item][1] += similarity
 
-    # Divide each total score by total weighting to get an average
-    rankings = [(score / totalSim[item], item) for item, score in scores.items()]
-
-    # Return the rankings from highest to lowest
-    rankings.sort()
-    rankings.reverse()
+    rankings = [(weighted_sum / t_sum, item) for item, (weighted_sum, t_sum) in scores_items.items()]
+    rankings.sort(reverse=True)
     return rankings
 
 
-def loadMovieLens(path='/data/movielens'):
-    # Get movie titles
+def load_movie_lens(path: str = '../data/movielens') -> MOVIE_DATA:
+    # 获取影片标题
     movies = {}
-    for line in open(path + '/u.item'):
-        (id, title) = line.split('|')[0:2]
-        movies[id] = title
-
-    # Load data
+    with open(path + "/u.item", encoding="u8") as fp:
+        for text in fp:
+            m_id, title, *_ = text.split("|")
+            movies[m_id] = title
+    # 获取用户数据
     prefs = {}
-    for line in open(path + '/u.data'):
-        (user, movieid, rating, ts) = line.split('\t')
-        prefs.setdefault(user, {})
-        prefs[user][movies[movieid]] = float(rating)
+    with open(path + "/u.data") as fp:
+        for text in fp:
+            user, m_id, rating, *_ = text.split('\t')
+            prefs.setdefault(user, {})
+            prefs[user][movies[m_id]] = float(rating)
+
     return prefs
+
+
+if __name__ == '__main__':
+    prefs = load_movie_lens()

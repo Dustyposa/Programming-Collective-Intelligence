@@ -5,7 +5,6 @@ from math import sqrt
 # read blog data
 def readfile(filename):
     lines = [line for line in open(filename)]
-
     # First line is the column titles
     colnames = lines[0].strip().split('\t')[1:]
     rownames = []
@@ -318,3 +317,9 @@ def draw2d(data, labels, jpeg='mds2d.jpg'):
         y = (data[i][1] + 0.5) * 1000
         draw.text((x, y), labels[i], (0, 0, 0))
     img.save(jpeg, 'JPEG')
+
+
+if __name__ == '__main__':
+    blog_names, words, data = readfile("data/blogdata.txt")
+    res = hcluster(data)
+    printclust(res, labels=words)
